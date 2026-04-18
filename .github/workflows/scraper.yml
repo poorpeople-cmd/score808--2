@@ -30,7 +30,6 @@ jobs:
       - name: Install System Dependencies (Chrome, Xvfb, FFmpeg, Fluxbox)
         run: |
           sudo apt-get update
-          # Fluxbox zaroori hai black screen rokne ke liye
           sudo apt-get install -y xvfb ffmpeg fluxbox
           wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
           sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
@@ -44,31 +43,33 @@ jobs:
 
       - name: Run Scraper inside Xvfb and Record with FFmpeg
         run: |
-          # 1. Start Virtual Display
-          Xvfb :99 -screen 0 1920x1080x24 &
+          # 1. Start Virtual Display (1280x720 resolution set ki hai Puppeteer jaisi)
+          Xvfb :99 -screen 0 1280x720x24 &
           XVFB_PID=$!
           export DISPLAY=:99
-          sleep 2
+          sleep 3 
           
-          # 2. Start Fluxbox (Window Manager to prevent black screen)
+          # 2. Start Fluxbox (Window Manager taake proper UI render ho)
           fluxbox >/dev/null 2>&1 &
           FLUXBOX_PID=$!
-          sleep 1
+          sleep 2
           
           echo "🎥 Recording shuru ho rahi hai background mein..."
           
-          # 3. Start FFmpeg (Suppressing keyboard layout warnings with loglevel)
-          ffmpeg -loglevel warning -y -f x11grab -s 1920x1080 -i :99 -codec:v libx264 -preset ultrafast -t 180 execution.mp4 &
+          # 3. Start FFmpeg (1280x720 ki recording)
+          ffmpeg -loglevel warning -y -f x11grab -framerate 30 -probesize 42M -s 1280x720 -i :99 -codec:v libx264 -preset ultrafast -t 180 execution.mp4 &
           FFMPEG_PID=$!
           
-          echo "🏃 Python Script run kar rahe hain..."
+          echo "🏃 Python Script run kar rahe hain (Live Logs ke sath)..."
           
-          # 4. Run the Python script
-          python scraper.py --url "${{ github.event.inputs.target_url }}" --drag ${{ github.event.inputs.drag_distance }} || true
+          # 4. Run Python Script
+          # -u: Logs live terminal mein dikhane ke liye
+          # timeout 3m: 3 minute baad auto-stop taake GitHub actions ke minutes zaya na hon
+          timeout 3m python -u scraper.py --url "${{ github.event.inputs.target_url }}" --drag ${{ github.event.inputs.drag_distance }} || echo "⚠️ Script ruki (Mukammal hui, Crash hui, ya Timeout ho gayi)."
           
-          echo "🛑 Python script khatam. Recording stop kar rahe hain..."
+          echo "🛑 Python script ka process khatam. Recording stop kar rahe hain..."
           
-          # 5. Stop processes
+          # 5. Stop processes gracefully
           kill $FFMPEG_PID
           wait $FFMPEG_PID || true
           kill $FLUXBOX_PID || true
@@ -78,7 +79,7 @@ jobs:
 
       - name: Upload Video Recording
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() # Script fail bhi ho toh video upload karega taake debug kar sakein
         with:
           name: bot-execution-video
           path: execution.mp4
