@@ -27,12 +27,11 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install System Dependencies (Chrome, Xvfb, FFmpeg)
+      - name: Install System Dependencies (Chrome, Xvfb, FFmpeg, Fluxbox)
         run: |
           sudo apt-get update
-          # Install FFmpeg and Xvfb (Virtual Framebuffer)
-          sudo apt-get install -y xvfb ffmpeg
-          # Install Google Chrome
+          # Fluxbox zaroori hai black screen rokne ke liye
+          sudo apt-get install -y xvfb ffmpeg fluxbox
           wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
           sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
           sudo apt-get update
@@ -44,50 +43,43 @@ jobs:
           pip install DrissionPage
 
       - name: Run Scraper inside Xvfb and Record with FFmpeg
-        # Humein aik bash script block run karna hai taake background processes handle ho sakein
         run: |
-          # 1. Start Virtual Display (Screen 0, Size 1920x1080) in background
+          # 1. Start Virtual Display
           Xvfb :99 -screen 0 1920x1080x24 &
           XVFB_PID=$!
-          
-          # Display variable set karein taake Chrome ise use kare
           export DISPLAY=:99
+          sleep 2
           
-          # Chhota sa wait taake Xvfb start ho jaye
-          sleep 3
+          # 2. Start Fluxbox (Window Manager to prevent black screen)
+          fluxbox >/dev/null 2>&1 &
+          FLUXBOX_PID=$!
+          sleep 1
           
           echo "🎥 Recording shuru ho rahi hai background mein..."
           
-          # 2. Start FFmpeg recording in background. 
-          # Ye display :99 ko record karega aur execution.mp4 file banayega.
-          # Hum -t 180 (3 minutes) limit laga rahe hain taake agar script hang ho jaye toh recording chalti na rahe.
-          ffmpeg -y -f x11grab -s 1920x1080 -i :99 -codec:v libx264 -preset ultrafast -t 180 execution.mp4 &
+          # 3. Start FFmpeg (Suppressing keyboard layout warnings with loglevel)
+          ffmpeg -loglevel warning -y -f x11grab -s 1920x1080 -i :99 -codec:v libx264 -preset ultrafast -t 180 execution.mp4 &
           FFMPEG_PID=$!
           
           echo "🏃 Python Script run kar rahe hain..."
           
-          # 3. Run the actual Python script.
-          # Hum '|| true' use kar rahe hain taake agar script fail bhi ho, workflow agla step (recording save karna) kare.
+          # 4. Run the Python script
           python scraper.py --url "${{ github.event.inputs.target_url }}" --drag ${{ github.event.inputs.drag_distance }} || true
           
           echo "🛑 Python script khatam. Recording stop kar rahe hain..."
           
-          # 4. Cleanup: FFmpeg ko pyar se stop karein (SIGTERM) taake video file corrupt na ho.
+          # 5. Stop processes
           kill $FFMPEG_PID
-          
-          # Wait karein taake FFmpeg file finalize kar le
           wait $FFMPEG_PID || true
-          
-          # Xvfb ko bhi stop karein
-          kill $XVFB_PID
+          kill $FLUXBOX_PID || true
+          kill $XVFB_PID || true
           
           echo "✅ Video file 'execution.mp4' ready hai."
 
       - name: Upload Video Recording
-        # Ye step video file ko GitHub Actions UI mein download ke liye available karega.
         uses: actions/upload-artifact@v4
-        if: always() # Script fail bhi ho jaye, tab bhi video upload karo
+        if: always()
         with:
           name: bot-execution-video
           path: execution.mp4
-          retention-days: 1 # Sirf 1 din ke liye save rakhein space bachane ke liye
+          retention-days: 1
