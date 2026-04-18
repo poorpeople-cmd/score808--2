@@ -5,18 +5,25 @@ import argparse
 import sys
 
 def main(target_url, drag_distance):
-    print("🚀 Browser config set kar rahe hain...")
+    print("🚀 Browser config set kar rahe hain (Puppeteer Style)...")
     
     co = ChromiumOptions()
-    # GitHub Actions mein Chrome ka exact path batana zaroori hai
+    # GitHub Actions mein Chrome ka exact path
     co.set_browser_path('/usr/bin/google-chrome')
     
-    # Ye commands Linux CI (GitHub Actions) mein crash aur black screen ko rokti hain
+    # ==========================================
+    # ⚙️ EXACT PUPPETEER REFERENCE ARGUMENTS
+    # ==========================================
     co.set_argument('--no-sandbox')
-    co.set_argument('--disable-dev-shm-usage') # MOST IMPORTANT FOR DOCKER/CI
+    co.set_argument('--disable-setuid-sandbox')
+    co.set_argument('--disable-blink-features=AutomationControlled')
+    co.set_argument('--mute-audio')
+    co.set_argument('--autoplay-policy=no-user-gesture-required')
+    
+    # Server stability ke liye zaroori (Crash aur Hang rokenge)
+    co.set_argument('--disable-dev-shm-usage') 
     co.set_argument('--disable-gpu')
-    co.set_argument('--window-size=1920,1080')
-    co.set_argument('--start-maximized')
+    co.set_argument('--window-size=1280,720')
     
     try:
         print("⏳ Chrome launch ho raha hai...")
@@ -30,7 +37,7 @@ def main(target_url, drag_distance):
         time.sleep(5)
 
         # ==========================================
-        # 🔄 SMART RETRY LOOP (Max 5 attempts)
+        # 🔄 SMART RETRY LOOP
         # ==========================================
         attempt_count = 1
         is_solved = False
@@ -53,6 +60,7 @@ def main(target_url, drag_distance):
                     
             if slider_btn:
                 print(f"⚠️ Slider mila. Drag start kar rahe hain ({drag_distance}px)...")
+                
                 slider_btn.hover()
                 time.sleep(random.uniform(0.5, 1.0))
                 
@@ -119,9 +127,8 @@ def main(target_url, drag_distance):
                     print("=====================================================================\n")
                     
                     print("🖥️ AAPKI FFMPEG COMMAND READY HAI:")
-                    print("👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇👇")
                     print(ffmpeg_cmd)
-                    print("👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆\n")
+                    print("=====================================================================\n")
                     break
                     
                 time.sleep(2) 
@@ -133,10 +140,10 @@ def main(target_url, drag_distance):
             print("\n❌ MISSION FAILED! Puzzle solve nahi hua.")
 
     except Exception as e:
-        print(f"\n❌ SCRIPT CRASH HO GAYI! Error details:\n{e}")
+        print(f"\n🚨 SCRIPT CRASH HO GAYI! Error ki tafseel:\n{e}")
 
     finally:
-        print("🛑 Script ka kaam mukammal ho gaya hai. Browser close kar rahe hain.")
+        print("🛑 Browser ko band kar rahe hain taake agla run theek se ho.")
         if 'page' in locals():
             page.quit()
 
